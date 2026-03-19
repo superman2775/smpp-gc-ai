@@ -9,7 +9,8 @@ const DEFAULTS = {
 
 let settings = { ...DEFAULTS };
 let lastSentAt = 0;
-const processed = new Set();
+const handled = new Set();
+const pendingTimers = new Map();
 
 function loadSettings() {
   return new Promise((resolve) => {
@@ -125,8 +126,27 @@ function markExisting() {
   const nodes = document.querySelectorAll("#mesgs .message");
   nodes.forEach((el) => {
     const id = getMessageId(el);
-    if (id) processed.add(id);
+    if (id) handled.add(id);
   });
+}
+
+function scheduleProcess(messageEl) {
+  const id = getMessageId(messageEl);
+  if (!id) return;
+  if (handled.has(id)) return;
+
+  if (pendingTimers.has(id)) {
+    clearTimeout(pendingTimers.get(id));
+  }
+
+  const timer = setTimeout(() => {
+    pendingTimers.delete(id);
+    if (handled.has(id)) return;
+    handled.add(id);
+    handleMessage(messageEl);
+  }, 400);
+
+  pendingTimers.set(id, timer);
 }
 
 function observeMessages() {
@@ -138,6 +158,12 @@ function observeMessages() {
 
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
+      if (m.type === "attributes" && m.target instanceof HTMLElement) {
+        const t = m.target;
+        if (t.classList.contains("message")) {
+          scheduleProcess(t);
+        }
+      }
       for (const node of m.addedNodes) {
         if (!(node instanceof HTMLElement)) continue;
         const messageEl = node.classList.contains("message")
@@ -145,17 +171,17 @@ function observeMessages() {
           : node.querySelector?.(".message");
         if (!messageEl) continue;
 
-        const id = getMessageId(messageEl);
-        if (id) {
-          if (processed.has(id)) continue;
-          processed.add(id);
-        }
-        handleMessage(messageEl);
+        scheduleProcess(messageEl);
       }
     }
   });
 
-  observer.observe(target, { childList: true, subtree: true });
+  observer.observe(target, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["data-snowflake"]
+  });
 }
 
 async function init() {
