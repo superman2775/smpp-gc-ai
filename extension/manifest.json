@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "SMPP GC AI Bot",
+  "version": "0.1.0",
+  "description": "Responds to ?ai messages in Smartschool++ Global Chat.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://gc.smartschoolplusplus.com/*",
+    "https://gc.smpp.be/*",
+    "https://ai.hackclub.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gc.smartschoolplusplus.com/v1*",
+        "https://gc.smpp.be/v1*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

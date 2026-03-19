@@ -6,7 +6,28 @@ Uptime: 00:00:00
 ## Features
 - AI-powered responses in the Global Chat.
 
-## Setup
+## Browser Extension (Recommended)
+The extension reads messages from the page and sends responses through the page UI.
+
+### Load the extension (Chrome/Chromium)
+1. Open `chrome://extensions`
+2. Enable `Developer mode`
+3. Click `Load unpacked` and select `extension/`
+4. If you update files, click the extension's `Reload` button
+
+### Configure
+Open the extension options page and set:
+- Hack Club AI API key
+- Your bot username (optional, avoids replying to yourself)
+- Prefix (default `?ai`)
+
+### How it works
+- Watches `#mesgs` for new `.message` nodes
+- Reads the message text from `.content`
+- If it starts with `?ai`, calls Hack Club AI
+- Sends response by filling `#send-input` and clicking `#sendbtn`
+
+## Python Bot (Legacy)
 Install dependencies:
 ```bash
 pip install websockets requests

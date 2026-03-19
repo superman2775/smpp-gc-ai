@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SMPP GC AI Bot - Options</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 16px;
+        max-width: 720px;
+      }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-weight: 600;
+      }
+      input, textarea {
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+        margin-top: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        margin-top: 16px;
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+      .hint {
+        color: #555;
+        font-size: 12px;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>SMPP GC AI Bot</h2>
+
+    <label for="apiKey">Hack Club AI API Key</label>
+    <input id="apiKey" type="password" placeholder="sk-..." />
+
+    <label for="model">Model</label>
+    <input id="model" type="text" placeholder="gpt-4o-mini" />
+
+    <label for="prefix">Trigger Prefix</label>
+    <input id="prefix" type="text" placeholder="?ai" />
+
+    <label for="botUsername">Bot Username (optional)</label>
+    <input id="botUsername" type="text" placeholder="your_username" />
+    <div class="hint">Used to avoid replying to your own messages.</div>
+
+    <label for="systemPrompt">System Prompt</label>
+    <textarea id="systemPrompt" rows="3"></textarea>
+
+    <label for="cooldownMs">Cooldown (ms)</label>
+    <input id="cooldownMs" type="number" min="0" step="100" />
+
+    <button id="saveBtn">Save</button>
+    <span id="status"></span>
+
+    <script src="options.js"></script>
+  </body>
+</html>
