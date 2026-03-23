@@ -3,7 +3,7 @@ const DEFAULTS = {
   model: "google/gemini-2.5-flash",
   prefix: "?ai",
   botUsername: "Smartschool AI Assistent",
-  systemPrompt: "You are a helpful assistant. Keep responses concise for chat.",
+  systemPrompt: "You are a helpful assistant. Keep responses concise for chat. If something must be forwarded to Discord, append a JSON object at the end like: {\"discord\":\"message\"}.",
   cooldownMs: 2500,
   reminderEnabled: true,
   reminderIntervalMs: 5 * 60 * 1000,
@@ -109,21 +109,65 @@ async function callAI(prompt, authorName) {
 
 function extractDiscordPayload(text) {
   if (!text) return { chatText: "", discordMessage: null };
-  const trimmed = text.trim();
-  const lastBrace = trimmed.lastIndexOf("{");
-  if (lastBrace === -1) return { chatText: trimmed, discordMessage: null };
 
-  const maybeJson = trimmed.slice(lastBrace);
-  try {
-    const obj = JSON.parse(maybeJson);
+  const trimmed = text.trim();
+
+  const unescapeJsonString = (s) =>
+    s.replace(/\\\\/g, "\\").replace(/\\"/g, "\"").replace(/\\n/g, "\n");
+
+  const tryExtractFromObject = (obj) => {
     const msg = obj && (obj.discord || obj.discord_message || obj.message);
     if (typeof msg === "string" && msg.trim()) {
-      const chatText = trimmed.slice(0, lastBrace).trim();
-      return { chatText, discordMessage: msg.trim() };
+      return msg.trim();
     }
-  } catch (_) {
-    return { chatText: trimmed, discordMessage: null };
+    return null;
+  };
+
+  const tryExtractFromText = (candidate) => {
+    try {
+      const obj = JSON.parse(candidate);
+      return tryExtractFromObject(obj);
+    } catch (_) {
+      // fallback: regex extraction for escaped or plain JSON
+      let m = candidate.match(/"discord"\s*:\s*"([^"]*)"/);
+      if (!m) m = candidate.match(/\\"discord\\"\s*:\s*\\"([^"]*)\\"/);
+      if (m && m[1]) {
+        return unescapeJsonString(m[1].trim());
+      }
+    }
+    return null;
+  };
+
+  // Prefer fenced JSON blocks if present.
+  const fenceMatch = trimmed.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch) {
+    const msg = tryExtractFromText(fenceMatch[1]);
+    const chatText = trimmed.replace(fenceMatch[0], "").trim();
+    return { chatText, discordMessage: msg };
   }
+
+  // Search for any JSON object with a discord field.
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        const candidate = trimmed.slice(start, i + 1);
+        if (/(\"|\\\")(?:discord|discord_message|message)(\"|\\\")\s*:/.test(candidate)) {
+          const msg = tryExtractFromText(candidate);
+          const chatText = (trimmed.slice(0, start) + trimmed.slice(i + 1)).trim();
+          return { chatText, discordMessage: msg };
+        }
+        start = -1;
+      }
+    }
+  }
+
   return { chatText: trimmed, discordMessage: null };
 }
 

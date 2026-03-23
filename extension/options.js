@@ -3,7 +3,7 @@ const DEFAULTS = {
   model: "google/gemini-2.5-flash",
   prefix: "?ai",
   botUsername: "Smartschool AI Assistent",
-  systemPrompt: "You are a helpful assistant. Keep responses concise for chat.",
+  systemPrompt: "You are a helpful assistant. Keep responses concise for chat. If something must be forwarded to Discord, append a JSON object at the end like: {\"discord\":\"message\"}.",
   cooldownMs: 2500,
   reminderEnabled: true,
   reminderIntervalMs: 5 * 60 * 1000,
