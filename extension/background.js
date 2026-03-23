@@ -36,3 +36,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   return true;
 });
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || msg.type !== "DISCORD_WEBHOOK") return;
+
+  const { webhookUrl, content } = msg;
+  if (!webhookUrl || !content) {
+    sendResponse({ ok: false, error: "Missing webhookUrl or content" });
+    return true;
+  }
+
+  fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content })
+  })
+    .then(async (resp) => {
+      const text = await resp.text();
+      if (!resp.ok) {
+        sendResponse({ ok: false, error: `Discord error ${resp.status}: ${text}` });
+        return;
+      }
+      sendResponse({ ok: true });
+    })
+    .catch((err) => {
+      sendResponse({ ok: false, error: String(err) });
+    });
+
+  return true;
+});

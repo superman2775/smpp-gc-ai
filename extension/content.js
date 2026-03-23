@@ -1,14 +1,24 @@
 const DEFAULTS = {
   apiKey: "",
-  model: "gpt-4o-mini",
+  model: "google/gemini-2.5-flash",
   prefix: "?ai",
-  botUsername: "",
+  botUsername: "Smartschool AI Assistent",
   systemPrompt: "You are a helpful assistant. Keep responses concise for chat.",
-  cooldownMs: 2500
+  cooldownMs: 2500,
+  reminderEnabled: true,
+  reminderIntervalMs: 5 * 60 * 1000,
+  reminderMessage: "Reminder: you can use ?ai to ask the AI a question.",
+  requestCount: 0,
+  perUserDailyMaxEnabled: false,
+  perUserDailyMax: 5,
+  perUserDailyMaxMessage: "Je hebt je dagelijkse limiet voor AI bereikt. Probeer morgen opnieuw.",
+  discordWebhookEnabled: false,
+  discordWebhookUrl: ""
 };
 
 let settings = { ...DEFAULTS };
 let lastSentAt = 0;
+let lastTriggerAt = Date.now();
 const handled = new Set();
 const pendingTimers = new Map();
 
@@ -32,6 +42,14 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function todayKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function getMessageContent(el) {
   const contentEl = el.querySelector(".content");
   return contentEl ? contentEl.innerText.trim() : "";
@@ -45,7 +63,7 @@ function getMessageId(el) {
   return el.dataset.snowflake || "";
 }
 
-async function callAI(prompt) {
+async function callAI(prompt, authorName) {
   if (!settings.apiKey) {
     console.warn("[SMPP AI] Missing API key. Set it in extension options.");
     return null;
@@ -55,7 +73,7 @@ async function callAI(prompt) {
     model: settings.model,
     messages: [
       { role: "system", content: settings.systemPrompt },
-      { role: "user", content: prompt }
+      { role: "user", content: `User: ${authorName || "unknown"}\nMessage: ${prompt}` }
     ],
     temperature: 0.7
   };
@@ -73,7 +91,108 @@ async function callAI(prompt) {
   });
 
   const reply = data?.choices?.[0]?.message?.content;
+  chrome.storage.sync.get({ requestCount: 0 }, (items) => {
+    chrome.storage.sync.set({ requestCount: (items.requestCount || 0) + 1 });
+  });
+  if (authorName) {
+    const key = authorName.toLowerCase();
+    chrome.storage.sync.get({ perUserDailyCounts: { date: todayKey(), counts: {} } }, (items) => {
+      const stored = items.perUserDailyCounts || { date: todayKey(), counts: {} };
+      const date = stored.date === todayKey() ? stored.date : todayKey();
+      const counts = stored.date === todayKey() ? stored.counts || {} : {};
+      counts[key] = (counts[key] || 0) + 1;
+      chrome.storage.sync.set({ perUserDailyCounts: { date, counts } });
+    });
+  }
   return typeof reply === "string" ? reply.trim() : null;
+}
+
+function extractDiscordPayload(text) {
+  if (!text) return { chatText: "", discordMessage: null };
+  const trimmed = text.trim();
+  const lastBrace = trimmed.lastIndexOf("{");
+  if (lastBrace === -1) return { chatText: trimmed, discordMessage: null };
+
+  const maybeJson = trimmed.slice(lastBrace);
+  try {
+    const obj = JSON.parse(maybeJson);
+    const msg = obj && (obj.discord || obj.discord_message || obj.message);
+    if (typeof msg === "string" && msg.trim()) {
+      const chatText = trimmed.slice(0, lastBrace).trim();
+      return { chatText, discordMessage: msg.trim() };
+    }
+  } catch (_) {
+    return { chatText: trimmed, discordMessage: null };
+  }
+  return { chatText: trimmed, discordMessage: null };
+}
+
+async function sendDiscordWebhook(message) {
+  if (!settings.discordWebhookEnabled) return;
+  if (!settings.discordWebhookUrl) return;
+
+  await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { type: "DISCORD_WEBHOOK", webhookUrl: settings.discordWebhookUrl, content: message },
+      (resp) => {
+        const lastErr = chrome.runtime.lastError;
+        if (lastErr) return reject(new Error(lastErr.message));
+        if (!resp || !resp.ok) return reject(new Error(resp?.error || "Unknown error"));
+        resolve();
+      }
+    );
+  });
+}
+
+async function canProcessForUser(username) {
+  if (!settings.perUserDailyMaxEnabled) return true;
+  if (!username) return true;
+
+  const key = username.toLowerCase();
+  const max = Number(settings.perUserDailyMax) || 0;
+  if (max <= 0) return true;
+
+  const data = await new Promise((resolve) => {
+    chrome.storage.sync.get({ perUserDailyCounts: { date: todayKey(), counts: {} } }, resolve);
+  });
+
+  const stored = data.perUserDailyCounts || { date: todayKey(), counts: {} };
+  if (stored.date !== todayKey()) {
+    await new Promise((resolve) => {
+      chrome.storage.sync.set({ perUserDailyCounts: { date: todayKey(), counts: {} } }, resolve);
+    });
+    return true;
+  }
+
+  const count = (stored.counts && stored.counts[key]) || 0;
+  if (count < max) return true;
+
+  // Send one standard message per user per day when limit is reached.
+  const notifiedData = await new Promise((resolve) => {
+    chrome.storage.sync.get(
+      { perUserDailyLimitNotified: { date: todayKey(), users: {} } },
+      resolve
+    );
+  });
+
+  const notified = notifiedData.perUserDailyLimitNotified || { date: todayKey(), users: {} };
+  if (notified.date !== todayKey()) {
+    await new Promise((resolve) => {
+      chrome.storage.sync.set(
+        { perUserDailyLimitNotified: { date: todayKey(), users: {} } },
+        resolve
+      );
+    });
+  }
+
+  const users = notified.date === todayKey() ? notified.users || {} : {};
+  if (!users[key]) {
+    sendMessage(settings.perUserDailyMaxMessage);
+    users[key] = true;
+    chrome.storage.sync.set({ perUserDailyLimitNotified: { date: todayKey(), users } });
+  }
+
+  return false;
 }
 
 function sendMessage(text) {
@@ -88,6 +207,16 @@ function sendMessage(text) {
   input.textContent = text;
   input.dispatchEvent(new Event("input", { bubbles: true }));
   button.click();
+}
+
+function startReminderLoop() {
+  setInterval(() => {
+    if (!settings.reminderEnabled) return;
+    const now = Date.now();
+    if (now - lastTriggerAt < settings.reminderIntervalMs) return;
+    sendMessage(settings.reminderMessage);
+    lastTriggerAt = Date.now();
+  }, 10000);
 }
 
 async function handleMessage(el) {
@@ -105,21 +234,36 @@ async function handleMessage(el) {
   const prompt = content.slice(prefix.length).trim();
   if (!prompt) return;
 
+  const allowed = await canProcessForUser(username);
+  if (!allowed) return;
+
   const now = Date.now();
   const wait = Math.max(0, settings.cooldownMs - (now - lastSentAt));
   if (wait > 0) await sleep(wait);
 
   let reply;
   try {
-    reply = await callAI(prompt);
+    reply = await callAI(prompt, username);
   } catch (err) {
     console.warn("[SMPP AI] AI call failed:", err);
     return;
   }
   if (!reply) return;
 
-  sendMessage(reply);
+  const { chatText, discordMessage } = extractDiscordPayload(reply);
+  if (chatText) {
+    sendMessage(chatText);
+  }
+  if (discordMessage) {
+    try {
+      await sendDiscordWebhook(discordMessage);
+    } catch (err) {
+      console.warn("[SMPP AI] Discord webhook failed:", err);
+    }
+  }
+
   lastSentAt = Date.now();
+  lastTriggerAt = Date.now();
 }
 
 function markExisting() {
@@ -188,6 +332,7 @@ async function init() {
   await loadSettings();
   markExisting();
   observeMessages();
+  startReminderLoop();
   console.log("[SMPP AI] Bot loaded.");
 }
 

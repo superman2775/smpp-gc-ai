@@ -4,37 +4,94 @@
     <meta charset="utf-8" />
     <title>SMPP GC AI Bot - Options</title>
     <style>
+      :root {
+        --bg: #f7f8fa;
+        --card: #ffffff;
+        --text: #1f2328;
+        --muted: #667085;
+        --accent: #2f6feb;
+        --border: #e5e7eb;
+      }
       body {
-        font-family: Arial, sans-serif;
-        padding: 16px;
-        max-width: 720px;
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+      }
+      h2 {
+        margin: 0 0 12px 0;
+        font-size: 20px;
       }
       label {
         display: block;
-        margin-top: 12px;
+        margin-top: 14px;
         font-weight: 600;
       }
       input, textarea {
         width: 100%;
-        padding: 8px;
+        padding: 9px 10px;
         font-size: 14px;
-        margin-top: 4px;
+        margin-top: 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
         box-sizing: border-box;
+        background: #fff;
+      }
+      input[type="checkbox"] {
+        width: auto;
+        margin-right: 8px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
       button {
         margin-top: 16px;
         padding: 10px 14px;
         font-size: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #fff;
+        color: var(--text);
       }
       .hint {
-        color: #555;
+        color: var(--muted);
         font-size: 12px;
         margin-top: 4px;
+      }
+      #status {
+        margin-left: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #requestCount {
+        font-size: 18px;
+        font-weight: 700;
+        margin-top: 6px;
       }
     </style>
   </head>
   <body>
-    <h2>SMPP GC AI Bot</h2>
+    <div class="wrap">
+      <div class="card">
+        <h2>SMPP GC AI Bot</h2>
 
     <label for="apiKey">Hack Club AI API Key</label>
     <input id="apiKey" type="password" placeholder="sk-..." />
@@ -52,11 +109,46 @@
     <label for="systemPrompt">System Prompt</label>
     <textarea id="systemPrompt" rows="3"></textarea>
 
-    <label for="cooldownMs">Cooldown (ms)</label>
-    <input id="cooldownMs" type="number" min="0" step="100" />
+        <label for="cooldownMs">Cooldown (ms)</label>
+        <input id="cooldownMs" type="number" min="0" step="100" />
 
-    <button id="saveBtn">Save</button>
-    <span id="status"></span>
+        <label class="row">
+          <input id="reminderEnabled" type="checkbox" />
+          Enable reminder message
+        </label>
+
+        <label for="reminderIntervalMs">Reminder interval (ms)</label>
+        <input id="reminderIntervalMs" type="number" min="10000" step="1000" />
+
+        <label for="reminderMessage">Reminder message</label>
+        <input id="reminderMessage" type="text" />
+
+        <label class="row">
+          <input id="perUserDailyMaxEnabled" type="checkbox" />
+          Enable per-user daily max
+        </label>
+
+        <label for="perUserDailyMax">Max requests per user per day</label>
+        <input id="perUserDailyMax" type="number" min="1" step="1" />
+
+        <label class="row">
+          <input id="discordWebhookEnabled" type="checkbox" />
+          Enable Discord webhook forwarding
+        </label>
+
+        <label for="discordWebhookUrl">Discord webhook URL</label>
+        <input id="discordWebhookUrl" type="text" />
+
+        <label>Request count</label>
+        <div id="requestCount">0</div>
+        <button id="resetCountBtn" class="secondary" type="button">Reset count</button>
+
+        <div class="row">
+          <button id="saveBtn">Save</button>
+          <span id="status"></span>
+        </div>
+      </div>
+    </div>
 
     <script src="options.js"></script>
   </body>

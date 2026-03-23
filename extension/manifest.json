@@ -10,7 +10,9 @@
   "host_permissions": [
     "https://gc.smartschoolplusplus.com/*",
     "https://gc.smpp.be/*",
-    "https://ai.hackclub.com/*"
+    "https://ai.hackclub.com/*",
+    "https://gcbeta.smartschoolplusplus.com/*",
+    "https://discord.com/*"
   ],
   "content_scripts": [
     {
