@@ -1,5 +1,6 @@
 const DEFAULTS = {
   apiKey: "",
+  apiKeys: [],
   model: "google/gemini-2.5-flash",
   prefix: "?ai",
   botUsername: "Smartschool AI Assistent",
@@ -21,7 +22,17 @@ function byId(id) {
 
 function load() {
   chrome.storage.sync.get(DEFAULTS, (items) => {
-    byId("apiKey").value = items.apiKey || "";
+    const keysFromArray = Array.isArray(items.apiKeys) ? items.apiKeys : [];
+    const keys =
+      keysFromArray.length > 0
+        ? keysFromArray
+        : items.apiKey
+          ? [items.apiKey]
+          : [];
+
+    byId("apiKey1").value = keys[0] || "";
+    byId("apiKey2").value = keys[1] || "";
+    byId("apiKey3").value = keys[2] || "";
     byId("model").value = items.model || "";
     byId("prefix").value = items.prefix || "";
     byId("botUsername").value = items.botUsername || "";
@@ -39,8 +50,14 @@ function load() {
 }
 
 function save() {
+  const apiKeys = [byId("apiKey1").value, byId("apiKey2").value, byId("apiKey3").value]
+    .map((k) => String(k || "").trim())
+    .filter(Boolean);
+  const uniqueApiKeys = [...new Set(apiKeys)].slice(0, 3);
+
   const data = {
-    apiKey: byId("apiKey").value.trim(),
+    apiKey: uniqueApiKeys[0] || "",
+    apiKeys: uniqueApiKeys,
     model: byId("model").value.trim() || DEFAULTS.model,
     prefix: byId("prefix").value.trim() || DEFAULTS.prefix,
     botUsername: byId("botUsername").value.trim(),

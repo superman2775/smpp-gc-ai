@@ -1,5 +1,6 @@
 const DEFAULTS = {
   apiKey: "",
+  apiKeys: [],
   model: "google/gemini-2.5-flash",
   prefix: "?ai",
   botUsername: "Smartschool AI Assistent",
@@ -59,28 +60,49 @@ function getMessageUsername(el) {
   return (el.dataset.username || "").trim();
 }
 
+function getMessageRole(el) {
+  const roleEl = el.querySelector(".message_top .role");
+  if (!roleEl) return "";
+  const text = roleEl.textContent ? roleEl.textContent.trim() : "";
+  if (text) return text;
+  if (roleEl.classList.contains("mod-badge")) return "mod";
+  if (roleEl.classList.contains("admin-badge")) return "admin";
+  return "";
+}
+
 function getMessageId(el) {
   return el.dataset.snowflake || "";
 }
 
-async function callAI(prompt, authorName) {
-  if (!settings.apiKey) {
-    console.warn("[SMPP AI] Missing API key. Set it in extension options.");
+function hasAnyApiKey() {
+  if (Array.isArray(settings.apiKeys) && settings.apiKeys.some((k) => String(k || "").trim())) {
+    return true;
+  }
+  return Boolean(String(settings.apiKey || "").trim());
+}
+
+async function callAI(prompt, authorName, authorRole) {
+  if (!hasAnyApiKey()) {
+    console.warn("[SMPP AI] Missing API key(s). Set up to 3 keys in extension options.");
     return null;
   }
 
+  const roleSuffix = authorRole ? ` (role: ${authorRole})` : "";
   const payload = {
     model: settings.model,
     messages: [
       { role: "system", content: settings.systemPrompt },
-      { role: "user", content: `User: ${authorName || "unknown"}\nMessage: ${prompt}` }
+      {
+        role: "user",
+        content: `User: ${authorName || "unknown"}${roleSuffix}\nMessage: ${prompt}`
+      }
     ],
     temperature: 0.7
   };
 
   const data = await new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
-      { type: "AI_REQUEST", apiKey: settings.apiKey, payload },
+      { type: "AI_REQUEST", payload },
       (resp) => {
         const lastErr = chrome.runtime.lastError;
         if (lastErr) return reject(new Error(lastErr.message));
@@ -131,6 +153,7 @@ function extractDiscordPayload(text) {
       // fallback: regex extraction for escaped or plain JSON
       let m = candidate.match(/"discord"\s*:\s*"([^"]*)"/);
       if (!m) m = candidate.match(/\\"discord\\"\s*:\s*\\"([^"]*)\\"/);
+      if (!m) m = candidate.match(/\bdiscord\s*:\s*([^}]+)\}/i);
       if (m && m[1]) {
         return unescapeJsonString(m[1].trim());
       }
@@ -158,7 +181,10 @@ function extractDiscordPayload(text) {
       depth--;
       if (depth === 0 && start !== -1) {
         const candidate = trimmed.slice(start, i + 1);
-        if (/(\"|\\\")(?:discord|discord_message|message)(\"|\\\")\s*:/.test(candidate)) {
+        if (
+          /(\"|\\\")(?:discord|discord_message|message)(\"|\\\")\s*:/.test(candidate) ||
+          /\bdiscord\s*:/.test(candidate)
+        ) {
           const msg = tryExtractFromText(candidate);
           const chatText = (trimmed.slice(0, start) + trimmed.slice(i + 1)).trim();
           return { chatText, discordMessage: msg };
@@ -265,6 +291,7 @@ function startReminderLoop() {
 
 async function handleMessage(el) {
   const username = getMessageUsername(el);
+  const role = getMessageRole(el);
   if (settings.botUsername && username.toLowerCase() === settings.botUsername.toLowerCase()) {
     return;
   }
@@ -287,7 +314,7 @@ async function handleMessage(el) {
 
   let reply;
   try {
-    reply = await callAI(prompt, username);
+    reply = await callAI(prompt, username, role);
   } catch (err) {
     console.warn("[SMPP AI] AI call failed:", err);
     return;

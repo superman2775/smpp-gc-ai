@@ -93,8 +93,11 @@
       <div class="card">
         <h2>SMPP GC AI Bot</h2>
 
-    <label for="apiKey">Hack Club AI API Key</label>
-    <input id="apiKey" type="password" placeholder="sk-..." />
+    <label for="apiKey1">Hack Club AI API Keys (up to 3)</label>
+    <input id="apiKey1" type="password" placeholder="Key 1 (primary) - sk-..." />
+    <input id="apiKey2" type="password" placeholder="Key 2 (optional) - sk-..." />
+    <input id="apiKey3" type="password" placeholder="Key 3 (optional) - sk-..." />
+    <div class="hint">Leave empty to disable. Requests are distributed across provided keys.</div>
 
     <label for="model">Model</label>
     <input id="model" type="text" placeholder="gpt-4o-mini" />
