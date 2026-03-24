@@ -10,8 +10,10 @@ const DEFAULTS = {
   reminderIntervalMs: 5 * 60 * 1000,
   reminderMessage: "Reminder: you can use ?ai to ask the AI a question.",
   requestCount: 0,
-  perUserDailyMaxEnabled: false,
-  perUserDailyMax: 5,
+  rateLimitEnabled: false,
+  rateLimitMode: "per_user_day",
+  rateLimitMax: 5,
+  rateLimitMessage: "Je hebt je limiet voor AI bereikt. Probeer later opnieuw.",
   discordWebhookEnabled: false,
   discordWebhookUrl: ""
 };
@@ -42,8 +44,10 @@ function load() {
     byId("reminderIntervalMs").value = items.reminderIntervalMs || 0;
     byId("reminderMessage").value = items.reminderMessage || "";
     byId("requestCount").textContent = String(items.requestCount || 0);
-    byId("perUserDailyMaxEnabled").checked = Boolean(items.perUserDailyMaxEnabled);
-    byId("perUserDailyMax").value = items.perUserDailyMax || 0;
+    byId("rateLimitEnabled").checked = Boolean(items.rateLimitEnabled);
+    byId("rateLimitMode").value = items.rateLimitMode || "per_user_day";
+    byId("rateLimitMax").value = items.rateLimitMax || 0;
+    byId("rateLimitMessage").value = items.rateLimitMessage || "";
     byId("discordWebhookEnabled").checked = Boolean(items.discordWebhookEnabled);
     byId("discordWebhookUrl").value = items.discordWebhookUrl || "";
   });
@@ -66,8 +70,10 @@ function save() {
     reminderEnabled: byId("reminderEnabled").checked,
     reminderIntervalMs: Number(byId("reminderIntervalMs").value) || DEFAULTS.reminderIntervalMs,
     reminderMessage: byId("reminderMessage").value.trim() || DEFAULTS.reminderMessage,
-    perUserDailyMaxEnabled: byId("perUserDailyMaxEnabled").checked,
-    perUserDailyMax: Number(byId("perUserDailyMax").value) || DEFAULTS.perUserDailyMax,
+    rateLimitEnabled: byId("rateLimitEnabled").checked,
+    rateLimitMode: byId("rateLimitMode").value || DEFAULTS.rateLimitMode,
+    rateLimitMax: Number(byId("rateLimitMax").value) || DEFAULTS.rateLimitMax,
+    rateLimitMessage: byId("rateLimitMessage").value.trim() || DEFAULTS.rateLimitMessage,
     discordWebhookEnabled: byId("discordWebhookEnabled").checked,
     discordWebhookUrl: byId("discordWebhookUrl").value.trim()
   };

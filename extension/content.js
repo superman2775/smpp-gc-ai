@@ -10,9 +10,10 @@ const DEFAULTS = {
   reminderIntervalMs: 5 * 60 * 1000,
   reminderMessage: "Reminder: you can use ?ai to ask the AI a question.",
   requestCount: 0,
-  perUserDailyMaxEnabled: false,
-  perUserDailyMax: 5,
-  perUserDailyMaxMessage: "Je hebt je dagelijkse limiet voor AI bereikt. Probeer morgen opnieuw.",
+  rateLimitEnabled: false,
+  rateLimitMode: "per_user_day",
+  rateLimitMax: 5,
+  rateLimitMessage: "Je hebt je limiet voor AI bereikt. Probeer later opnieuw.",
   discordWebhookEnabled: false,
   discordWebhookUrl: ""
 };
@@ -49,6 +50,15 @@ function todayKey() {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function hourKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  return `${y}-${m}-${day} ${h}`;
 }
 
 function getMessageContent(el) {
@@ -116,14 +126,18 @@ async function callAI(prompt, authorName, authorRole) {
   chrome.storage.sync.get({ requestCount: 0 }, (items) => {
     chrome.storage.sync.set({ requestCount: (items.requestCount || 0) + 1 });
   });
-  if (authorName) {
-    const key = authorName.toLowerCase();
-    chrome.storage.sync.get({ perUserDailyCounts: { date: todayKey(), counts: {} } }, (items) => {
-      const stored = items.perUserDailyCounts || { date: todayKey(), counts: {} };
-      const date = stored.date === todayKey() ? stored.date : todayKey();
-      const counts = stored.date === todayKey() ? stored.counts || {} : {};
-      counts[key] = (counts[key] || 0) + 1;
-      chrome.storage.sync.set({ perUserDailyCounts: { date, counts } });
+  const mode = settings.rateLimitMode || "per_user_day";
+  const isPerUser = mode === "per_user_hour" || mode === "per_user_day";
+  if (!isPerUser || authorName) {
+    const bucket = mode.includes("hour") ? hourKey() : todayKey();
+    const storeKey = mode.includes("hour") ? "rateLimitHourly" : "rateLimitDaily";
+    const counterKey = isPerUser ? authorName.toLowerCase() : "__all__";
+
+    chrome.storage.sync.get({ [storeKey]: { bucket, counts: {} } }, (items) => {
+      const stored = items[storeKey] || { bucket, counts: {} };
+      const counts = stored.bucket === bucket ? stored.counts || {} : {};
+      counts[counterKey] = (counts[counterKey] || 0) + 1;
+      chrome.storage.sync.set({ [storeKey]: { bucket, counts } });
     });
   }
   return typeof reply === "string" ? reply.trim() : null;
@@ -153,6 +167,7 @@ function extractDiscordPayload(text) {
       // fallback: regex extraction for escaped or plain JSON
       let m = candidate.match(/"discord"\s*:\s*"([^"]*)"/);
       if (!m) m = candidate.match(/\\"discord\\"\s*:\s*\\"([^"]*)\\"/);
+      if (!m) m = candidate.match(/\\+discord\\*"\s*:\s*"([^"]*)"/);
       if (!m) m = candidate.match(/\bdiscord\s*:\s*([^}]+)\}/i);
       if (m && m[1]) {
         return unescapeJsonString(m[1].trim());
@@ -183,6 +198,7 @@ function extractDiscordPayload(text) {
         const candidate = trimmed.slice(start, i + 1);
         if (
           /(\"|\\\")(?:discord|discord_message|message)(\"|\\\")\s*:/.test(candidate) ||
+          /\\+discord\\*"\s*:/.test(candidate) ||
           /\bdiscord\s*:/.test(candidate)
         ) {
           const msg = tryExtractFromText(candidate);
@@ -215,53 +231,36 @@ async function sendDiscordWebhook(message) {
 }
 
 async function canProcessForUser(username) {
-  if (!settings.perUserDailyMaxEnabled) return true;
-  if (!username) return true;
+  if (!settings.rateLimitEnabled) return true;
 
-  const key = username.toLowerCase();
-  const max = Number(settings.perUserDailyMax) || 0;
+  const max = Number(settings.rateLimitMax) || 0;
   if (max <= 0) return true;
 
+  const userKey = (username || "").toLowerCase();
+  const mode = settings.rateLimitMode || "per_user_day";
+
+  const isPerUser = mode === "per_user_hour" || mode === "per_user_day";
+  if (isPerUser && !userKey) return true;
+
+  const bucket = mode.includes("hour") ? hourKey() : todayKey();
+  const storeKey = mode.includes("hour") ? "rateLimitHourly" : "rateLimitDaily";
+
   const data = await new Promise((resolve) => {
-    chrome.storage.sync.get({ perUserDailyCounts: { date: todayKey(), counts: {} } }, resolve);
+    chrome.storage.sync.get({ [storeKey]: { bucket, counts: {} } }, resolve);
   });
 
-  const stored = data.perUserDailyCounts || { date: todayKey(), counts: {} };
-  if (stored.date !== todayKey()) {
-    await new Promise((resolve) => {
-      chrome.storage.sync.set({ perUserDailyCounts: { date: todayKey(), counts: {} } }, resolve);
-    });
-    return true;
+  const stored = data[storeKey] || { bucket, counts: {} };
+  let counts = stored.counts || {};
+
+  if (stored.bucket !== bucket) {
+    counts = {};
   }
 
-  const count = (stored.counts && stored.counts[key]) || 0;
+  const counterKey = isPerUser ? userKey : "__all__";
+  const count = counts[counterKey] || 0;
   if (count < max) return true;
 
-  // Send one standard message per user per day when limit is reached.
-  const notifiedData = await new Promise((resolve) => {
-    chrome.storage.sync.get(
-      { perUserDailyLimitNotified: { date: todayKey(), users: {} } },
-      resolve
-    );
-  });
-
-  const notified = notifiedData.perUserDailyLimitNotified || { date: todayKey(), users: {} };
-  if (notified.date !== todayKey()) {
-    await new Promise((resolve) => {
-      chrome.storage.sync.set(
-        { perUserDailyLimitNotified: { date: todayKey(), users: {} } },
-        resolve
-      );
-    });
-  }
-
-  const users = notified.date === todayKey() ? notified.users || {} : {};
-  if (!users[key]) {
-    sendMessage(settings.perUserDailyMaxMessage);
-    users[key] = true;
-    chrome.storage.sync.set({ perUserDailyLimitNotified: { date: todayKey(), users } });
-  }
-
+  sendMessage(settings.rateLimitMessage);
   return false;
 }
 

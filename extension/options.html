@@ -38,7 +38,7 @@
         margin-top: 14px;
         font-weight: 600;
       }
-      input, textarea {
+      input, textarea, select {
         width: 100%;
         padding: 9px 10px;
         font-size: 14px;
@@ -127,12 +127,23 @@
         <input id="reminderMessage" type="text" />
 
         <label class="row">
-          <input id="perUserDailyMaxEnabled" type="checkbox" />
-          Enable per-user daily max
+          <input id="rateLimitEnabled" type="checkbox" />
+          Enable rate limit
         </label>
 
-        <label for="perUserDailyMax">Max requests per user per day</label>
-        <input id="perUserDailyMax" type="number" min="1" step="1" />
+        <label for="rateLimitMode">Rate limit mode</label>
+        <select id="rateLimitMode">
+          <option value="per_user_hour">Max requests per hour per user</option>
+          <option value="per_all_hour">Max requests per hour for all users</option>
+          <option value="per_user_day">Max requests per day per user</option>
+          <option value="per_all_day">Max requests per day for all users</option>
+        </select>
+
+        <label for="rateLimitMax">Max requests</label>
+        <input id="rateLimitMax" type="number" min="1" step="1" />
+
+        <label for="rateLimitMessage">Rate limit message</label>
+        <input id="rateLimitMessage" type="text" />
 
         <label class="row">
           <input id="discordWebhookEnabled" type="checkbox" />
